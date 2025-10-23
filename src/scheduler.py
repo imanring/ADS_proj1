@@ -39,17 +39,18 @@ class Scheduler:
             self.active_flights[key[1]] = None
             print(f"Flight {key[1]} has complete at time {self.currentTime}")
         # promotion of pending flights to active flights if possible
-        
+
     
 
     def reschedule(self):
         # pop all flights from pending and push into new pending heap
+        new_pending = None
         # create new next available runway heap based on old one.
-
+        new_runway_pool = self.runway_pool.copy()
         # schedule all pending flights
-        while self.pending_flights is not None and self.pending_flights:
+        while self.pending_flights is not None:
             # get next available runway
-            runwayID, nextFreeTime = self.runway_pool.pop_min()
+            runwayID, nextFreeTime = self.new_runway_pool.pop_min()
             # get highest priority flight
             key, flight = self.pending_flights.pop_max()
 
@@ -61,8 +62,16 @@ class Scheduler:
             print(f"Flight {flight.flightID} scheduled on Runway {runwayID} - ETA: {eta}")
             # update data structures
             self.time_table.insert((eta, flight.flightID), runwayID)
-            self.runway_pool.insert((eta, runwayID), (runwayID, eta))
+            self.new_runway_pool.insert((eta, runwayID), (runwayID, eta))
             self.active_flights[flight.flightID] = flight
+            # add to new pending heap with updated key
+            new_fligt = PairingHeap(key, flight)
+            if new_pending is None:
+                new_pending = new_fligt
+            else:
+                new_pending = new_pending.meld(new_fligt)
+            self.handles[flight.flightID] = new_fligt
+        self.pending_flights = new_pending
 
     
     def submitFlight(self, flightID, airlineID, submitTime, priority, duration):
