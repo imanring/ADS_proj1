@@ -13,6 +13,8 @@ class Flight:
         self.startTime = -1 
         self.ETA = -1
         self.runwayID = -1
+    def __str__(self):
+        return f"[fID: {self.flightID}, subTime: {self.submitTime}, priority: {self.priority}, ETA: {self.ETA}, {self.state}]"
 
 
 class Scheduler:
@@ -70,9 +72,10 @@ class Scheduler:
             # get next available runway
             mhn = self.runway_pool.pop_min()
             runwayID, nextFreeTime = mhn.payload
+            #print(nextFreeTime)
             # get highest priority flight
             flight, self.pending_flights = self.pending_flights.pop_max()
-
+            #print(flight[1].flightID)
             start_time = self.currentTime if self.currentTime > nextFreeTime else nextFreeTime
             eta = start_time + flight[1].duration
             #print(start_time, eta)
@@ -100,6 +103,9 @@ class Scheduler:
             else:
                 new_pending = new_pending.meld(new_flight)
             self.handles[flight[1].flightID] = (new_flight, node)
+        #if new_pending is not None:
+        #    new_pending.dfs()
+        #    print("End DFS")
         self.pending_flights = new_pending
 
     def print_updated_etas(self):
@@ -151,7 +157,7 @@ class Scheduler:
             self.pending_flights = self.pending_flights.arbitrary_delete(self.handles[flightID][0])
             # shouldn't be in active_flights
             self.time_table.arbitrary_delete(self.handles[flightID][1].idx)
-            # TODO: inefficient method of removing from airline_index
+            # inefficient method of removing from airline_index
             self.airline_index[self.handles[flightID][0].payload.airlineID] = [c for c in self.airline_index[self.handles[flightID][0].payload.airlineID] if c != self.handles[flightID][0].payload.flightID]
             self.handles.pop(flightID)
 
@@ -174,7 +180,7 @@ class Scheduler:
         elif flightID in self.active_flights:
             print(f"Cannot reprioritize: Flight {flightID} has already departed.")
         else:
-            # TODO: what if newPriority < oldPriority
+            # what if newPriority < oldPriority
             oldPriority = self.handles[flightID][0].key[0]
             if newPriority >= oldPriority:
                 self.pending_flights = self.pending_flights.increase_key(
@@ -219,11 +225,20 @@ class Scheduler:
         if airlineHigh < airlineLow:
             print("Invalid input. Please provide a valid airline range.")
         else:
-            # TODO: remove flights from data structures
+            # remove flights from data structures
+            airlineIDs = [k for k in self.airline_index.keys() if k >= airlineLow and k <= airlineHigh]
+            for aID in airlineIDs:
+                for fID in self.airline_index[aID]:
+                    # remove from datastructures
+                    if fID not in self.active_flights:
+                        self.pending_flights = self.pending_flights.arbitrary_delete(self.handles[fID][0])
+                        self.handles.pop(fID)
+                        self.airline_index[aID].remove(fID)
             # reschedule
-            self.reschedule(rt)
+            self.reschedule(rt, restart_changes=False)
             print(f"GroundHold applied to airlines[{airlineLow},{airlineHigh}].")
-            # TODO: print updated ETAs
+            # print updated ETAs
+            self.print_updated_etas()
 
 
     def printActive(self):
@@ -236,12 +251,15 @@ class Scheduler:
 
     def printSchedule(self, t1, t2):
         # get all scheduled flights
-        flights = self.pending_flights.dfs_list([])
-        flights = [f for f in flights if f.state == "SCHEDULED" and f.startTime > self.currentTime and t1 <= f.ETA and t2 >= f.ETA]
-        for f in sorted(flights, key=lambda f: (f.ETA, f.flightID)):
-            print(f"[{f.flightID}]")
-        if len(flights) == 0:
+        if self.pending_flights is None:
             print("There are no flights in that time period")
+        else:
+            flights = self.pending_flights.dfs_list([])
+            flights = [f for f in flights if f.state == "SCHEDULED" and f.startTime > self.currentTime and t1 <= f.ETA and t2 >= f.ETA]
+            for f in sorted(flights, key=lambda f: (f.ETA, f.flightID)):
+                print(f"[{f.flightID}]")
+            if len(flights) == 0:
+                print("There are no flights in that time period")
 
 
     def tick(self, t):
@@ -249,50 +267,6 @@ class Scheduler:
         # settle, reschedule
         rt = self.settle()
         self.reschedule(rt)
-        # TODO: print updated ETAs
+        # print updated ETAs
+        self.print_updated_etas()
         
-
-    def parseCommand(self, command):
-        cmd = command.split()
-        if cmd[0] == "submitFlight":
-            self.submitFlight(int(cmd[1]), int(cmd[2]), int(cmd[3]), int(cmd[4]), int(cmd[5]))
-        elif cmd[0] == "cancelFlight":
-            self.cancelFlight(int(cmd[1]), int(cmd[2]))
-        elif cmd[0] == "reprioritize":
-            self.reprioritize(int(cmd[1]), int(cmd[2]), int(cmd[3]))
-        elif cmd[0] == "addRunways":
-            self.addRunways(int(cmd[1]), int(cmd[2]))
-        elif cmd[0] == "groundHold":
-            self.groundHold(int(cmd[1]), int(cmd[2]), int(cmd[3]))
-        elif cmd[0] == "printActive":
-            self.printActive()
-        elif cmd[0] == "printSchedule":
-            self.printSchedule(int(cmd[1]), int(cmd[2]))
-        elif cmd[0] == "tick":
-            self.tick(int(cmd[1]))
-        else:
-            print("Invalid command")
-
-
-if __name__ == "__main__":
-    scheduler = Scheduler(2)
-    commands = [
-        "submitFlight 401 11 0 8 4",
-        "submitFlight 402 12 0 7 5",
-        "submitFlight 403 13 0 6 3",
-        "submitFlight 404 14 0 5 4",
-        "printSchedule 3 9",
-        "reprioritize 404 1 10",
-        "addRunways 1 1",
-        "submitFlight 405 15 2 6 2",
-        "submitFlight 406 16 3 7 5",
-        "groundHold 16 16 3",
-        "cancelFlight 405 3",
-        "tick 4",
-        "submitFlight 407 17 4 6 3",
-        "reprioritize 407 4 9"
-    ]
-    for command in commands:
-        #print(f"Command: {command}")
-        scheduler.parseCommand(command)
-        #print()

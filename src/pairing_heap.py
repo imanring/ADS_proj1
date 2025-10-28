@@ -39,6 +39,9 @@ class PairingHeap:
 
     def increase_key(self, n, i):
         n.key = (i, n.key[1], n.key[2])
+        n.payload.priority = i
+        if n == self:
+            return self
         # remove from sibling linked list
         if n.right is not None:
             n.right.left = n.left
@@ -83,7 +86,7 @@ class PairingHeap:
     def arbitrary_delete(self, tree):
         # arbitrary remove
         if tree == self: # removing root
-            return self.pop_max()
+            return self.pop_max()[1]
         
         # remove from double linked list
         if tree.left is not None:
@@ -105,7 +108,8 @@ class PairingHeap:
         # print key in depth first manner
         if self.child is not None:
             self.child.dfs()
-        print(self.key)
+        #print(self.key)
+        print(self.payload)
         if self.right is not None:
             self.right.dfs()
 
