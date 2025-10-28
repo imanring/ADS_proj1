@@ -38,7 +38,7 @@ class PairingHeap:
         return self.meld(new_tree)
 
     def increase_key(self, n, i):
-        n.key += i
+        n.key = (i, n.key[1], n.key[2])
         # remove from sibling linked list
         if n.right is not None:
             n.right.left = n.left
@@ -108,6 +108,14 @@ class PairingHeap:
         print(self.key)
         if self.right is not None:
             self.right.dfs()
+
+    def dfs_list(self, l):
+        if self.child is not None:
+            l = self.child.dfs_list(l)
+        l.append(self.payload)
+        if self.right is not None:
+            l = self.right.dfs_list(l)
+        return l
 
     def __str__(self):
         return f"{self.key}"

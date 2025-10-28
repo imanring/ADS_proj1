@@ -59,10 +59,12 @@ class Scheduler:
         return new_runway_pool
 
             
-    def reschedule(self, new_runway_pool):
+    def reschedule(self, new_runway_pool, restart_changes=True, exclude=[]):
         # pop all flights from pending and push into new pending heap
         new_pending = None
         self.runway_pool = copy.deepcopy(new_runway_pool)
+        if restart_changes:
+            self.updated_flights = {}
         # schedule all pending flights
         while self.pending_flights is not None:
             # get next available runway
@@ -73,12 +75,15 @@ class Scheduler:
 
             start_time = self.currentTime if self.currentTime > nextFreeTime else nextFreeTime
             eta = start_time + flight[1].duration
+            #print(start_time, eta)
+            if eta != flight[1].ETA and flight[1].flightID not in exclude:
+                self.updated_flights[flight[1].flightID] = eta
             flight[1].ETA = eta
             old_state = flight[1].state
             flight[1].state = "SCHEDULED"
             flight[1].startTime = start_time
             flight[1].runwayID = runwayID
-            print(f"Flight {flight[1].flightID} scheduled on Runway {runwayID} - ETA: {eta}")
+            #print(f"Flight {flight[1].flightID} scheduled on Runway {runwayID} - ETA: {eta}")
 
             # update data structures
             if old_state == "PENDING":
@@ -97,6 +102,10 @@ class Scheduler:
             self.handles[flight[1].flightID] = (new_flight, node)
         self.pending_flights = new_pending
 
+    def print_updated_etas(self):
+        l = [f"{k}: {v}" for k,v in sorted(self.updated_flights.items())]
+        if len(l) > 0:
+            print(f"Updated ETAs: [{", ".join(l)}]")
     
     def submitFlight(self, flightID, airlineID, submitTime, priority, duration):
         # settle
@@ -111,16 +120,21 @@ class Scheduler:
             # new flight
             f = Flight(flightID, airlineID, submitTime, priority, duration)
             new_flight = PairingHeap((priority, -submitTime, -flightID), f)
-
+            
+            if airlineID in self.airline_index:
+                self.airline_index[airlineID].append(flightID)
+            else:
+                self.airline_index[airlineID] = [flightID]
             self.handles[flightID] = (new_flight, None)
             if self.pending_flights is not None:
-                self.pending_flights.meld(new_flight)
+                self.pending_flights = self.pending_flights.meld(new_flight)
             else:
                 self.pending_flights = new_flight
             # reschedule
-            self.reschedule(rt)
+            self.reschedule(rt, restart_changes=False, exclude=[flightID])
             print(f"Flight {flightID} scheduled - ETA: {self.handles[flightID][0].payload.ETA}")
-            # TODO: print updated ETAs
+            # print updated ETAs
+            self.print_updated_etas()
 
     
     def cancelFlight(self, flightID, currentTime):
@@ -134,7 +148,7 @@ class Scheduler:
         elif flightID in self.active_flights:
             print(f"Cannot cancel: Flight {flightID} has already departed.")
         else:
-            self.pending_flights.arbitrary_delete(self.handles[flightID][0])
+            self.pending_flights = self.pending_flights.arbitrary_delete(self.handles[flightID][0])
             # shouldn't be in active_flights
             self.time_table.arbitrary_delete(self.handles[flightID][1].idx)
             # TODO: inefficient method of removing from airline_index
@@ -142,10 +156,11 @@ class Scheduler:
             self.handles[flightID] = None
 
             # reschedule
-            self.reschedule(rt)
+            self.reschedule(rt, restart_changes=False)
             print(f"Flight {flightID} has been canceled.")
 
-            # TODO: print updated ETAs
+            # print updated ETAs
+            self.print_updated_etas()
 
 
     def reprioritize(self, flightID, currentTime, newPriority):
@@ -160,11 +175,21 @@ class Scheduler:
             print(f"Cannot reprioritize: Flight {flightID} has already departed.")
         else:
             # TODO: what if newPriority < oldPriority
-            self.pending_flights.increase_key(self.handles[flightID], newPriority)
+            oldPriority = self.handles[flightID][0].key[0]
+            if newPriority >= oldPriority:
+                self.pending_flights = self.pending_flights.increase_key(
+                    self.handles[flightID][0],
+                    newPriority
+                    )
+            else:
+                self.pending_flights = self.pending_flights.arbitrary_delete(self.handles[flightID][0])
+                self.handles[flightID][0].key[0] = newPriority
+                self.pending_flights = self.pending_flights.meld(self.handles[flightID][0])
             # reschedule
-            self.reschedule(rt)
+            self.reschedule(rt, restart_changes=False)
             print(f"Priority of Flight {flightID} has been updated to {newPriority}")
-            # TODO: print updated ETAs
+            # print updated ETAs
+            self.print_updated_etas()
 
 
     def addRunways(self, count, currentTime):
@@ -179,10 +204,11 @@ class Scheduler:
             for i in range(self.numRunways + 1,self.numRunways + 1 + count):
                 rt.insert((currentTime,i), (i,currentTime))
             # reschedule
-            self.reschedule(rt)
+            self.reschedule(rt, restart_changes=False)
             self.numRunways += count
             print(f"Additional {count} runways are now available")
-            # TODO: print updated ETAs
+            # print updated ETAs
+            self.print_updated_etas()
 
     def groundHold(self, airlineLow, airlineHigh, currentTime):
         # settle, reschedule
@@ -210,8 +236,8 @@ class Scheduler:
 
     def printSchedule(self, t1, t2):
         # get all scheduled flights
-        #self.pending_flights.dfs_list()
-        flights = [f for f in self.active_flights.values() if f.state == "SCHEDULED" and f.startTime < self.currentTime and t1 <= f.ETA and t2 >= f.ETA]
+        flights = self.pending_flights.dfs_list([])
+        flights = [f for f in flights if f.state == "SCHEDULED" and f.startTime > self.currentTime and t1 <= f.ETA and t2 >= f.ETA]
         for f in sorted(flights, key=lambda f: (f.ETA, f.flightID)):
             print(f"[{f.flightID}]")
         if len(flights) == 0:
@@ -249,21 +275,24 @@ class Scheduler:
 
 
 if __name__ == "__main__":
-    scheduler = Scheduler(3)
+    scheduler = Scheduler(2)
     commands = [
-        "submitFlight 101 1 0 5 30",
-        "submitFlight 102 2 1 3 20",
-        "submitFlight 103 1 2 4 25",
-        "printActive",
-        "tick 10",
-        "reprioritize 102 10 6",
-        "cancelFlight 103 15",
-        "addRunways 2 20",
-        "groundHold 1 2 25",
-        "printSchedule 0 50",
-        "tick 30"
+        "submitFlight 401 11 0 8 4",
+        "submitFlight 402 12 0 7 5",
+        "submitFlight 403 13 0 6 3",
+        "submitFlight 404 14 0 5 4",
+        "printSchedule 3 9",
+        "reprioritize 404 1 10",
+        "addRunways 1 1",
+        "submitFlight 405 15 2 6 2",
+        "submitFlight 406 16 3 7 5",
+        "groundHold 16 16 3",
+        "cancelFlight 405 3",
+        "tick 4",
+        "submitFlight 407 17 4 6 3"
+        "reprioritize 407 4 9"
     ]
     for command in commands:
-        print(f"Command: {command}")
+        #print(f"Command: {command}")
         scheduler.parseCommand(command)
-        print()
+        #print()
