@@ -40,11 +40,11 @@ class Scheduler:
     def settle(self):
         while self.time_table.get_min().key[0] <= self.currentTime:
             node = self.time_table.pop_min()
-            if node.key[1] in self.active_flights:
-                self.active_flights[node.key[1]].state = "COMPLETED"
             # possibly remove from other data structures
             print(f"Flight {node.key[1]} has landed at time {node.key[0]}")
-            self.active_flights.pop(node.key[1])
+            if node.key[1] in self.active_flights:
+                self.active_flights[node.key[1]].state = "COMPLETED"
+                self.active_flights.pop(node.key[1])
         # promotion of pending flights to active flights if possible
         while self.pending_flights is not None and self.pending_flights.payload.startTime <= self.currentTime:
             # can no longer be rescheduled
@@ -130,6 +130,7 @@ class Scheduler:
                 self.airline_index[airlineID].append(flightID)
             else:
                 self.airline_index[airlineID] = [flightID]
+            print(self.airline_index[airlineID])
             self.handles[flightID] = (new_flight, None)
             if self.pending_flights is not None:
                 self.pending_flights = self.pending_flights.meld(new_flight)
@@ -227,6 +228,7 @@ class Scheduler:
             # remove flights from data structures
             airlineIDs = [k for k in self.airline_index.keys() if k >= airlineLow and k <= airlineHigh]
             for aID in airlineIDs:
+                print(self.airline_index[aID])
                 for fID in self.airline_index[aID]:
                     # remove from datastructures
                     if fID not in self.active_flights:
@@ -235,7 +237,7 @@ class Scheduler:
                         self.airline_index[aID].remove(fID)
             # reschedule
             self.reschedule(rt, restart_changes=False)
-            print(f"GroundHold applied to airlines[{airlineLow},{airlineHigh}].")
+            print(f"Flights of the airlines in the range [{airlineLow},{airlineHigh}] have been grounded")
             # print updated ETAs
             self.print_updated_etas()
 
