@@ -41,7 +41,7 @@ class Scheduler:
             if node.key[1] in self.active_flights:
                 self.active_flights[node.key[1]].state = "COMPLETED"
             # possibly remove from other data structures
-            self.active_flights[node.key[1]] = None
+            self.active_flights.pop(node.key[1])
             print(f"Flight {node.key[1]} has complete at time {self.currentTime}")
         # promotion of pending flights to active flights if possible
         while self.pending_flights is not None and self.pending_flights.payload.startTime <= self.currentTime:
@@ -153,7 +153,7 @@ class Scheduler:
             self.time_table.arbitrary_delete(self.handles[flightID][1].idx)
             # TODO: inefficient method of removing from airline_index
             self.airline_index[self.handles[flightID][0].payload.airlineID] = [c for c in self.airline_index[self.handles[flightID][0].payload.airlineID] if c != self.handles[flightID][0].payload.flightID]
-            self.handles[flightID] = None
+            self.handles.pop(flightID)
 
             # reschedule
             self.reschedule(rt, restart_changes=False)
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         "groundHold 16 16 3",
         "cancelFlight 405 3",
         "tick 4",
-        "submitFlight 407 17 4 6 3"
+        "submitFlight 407 17 4 6 3",
         "reprioritize 407 4 9"
     ]
     for command in commands:
