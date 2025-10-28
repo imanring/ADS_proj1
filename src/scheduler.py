@@ -14,7 +14,7 @@ class Flight:
         self.ETA = -1
         self.runwayID = -1
     def __str__(self):
-        return f"[fID: {self.flightID}, subTime: {self.submitTime}, priority: {self.priority}, ETA: {self.ETA}, {self.state}]"
+        return f"[flight{self.flightID}, airline{self.airlineID}, runway{self.runwayID}, start{self.startTime}, ETA{self.ETA}]"
 
 
 class Scheduler:
@@ -43,8 +43,8 @@ class Scheduler:
             if node.key[1] in self.active_flights:
                 self.active_flights[node.key[1]].state = "COMPLETED"
             # possibly remove from other data structures
+            print(f"Flight {node.key[1]} has landed at time {node.key[0]}")
             self.active_flights.pop(node.key[1])
-            print(f"Flight {node.key[1]} has complete at time {self.currentTime}")
         # promotion of pending flights to active flights if possible
         while self.pending_flights is not None and self.pending_flights.payload.startTime <= self.currentTime:
             # can no longer be rescheduled
@@ -59,8 +59,7 @@ class Scheduler:
         for rid in runwayIDs:
             new_runway_pool.insert((self.currentTime, rid), (rid, self.currentTime))
         return new_runway_pool
-
-            
+      
     def reschedule(self, new_runway_pool, restart_changes=True, exclude=[]):
         # pop all flights from pending and push into new pending heap
         new_pending = None
@@ -139,10 +138,10 @@ class Scheduler:
             # reschedule
             self.reschedule(rt, restart_changes=False, exclude=[flightID])
             print(f"Flight {flightID} scheduled - ETA: {self.handles[flightID][0].payload.ETA}")
+            
             # print updated ETAs
             self.print_updated_etas()
 
-    
     def cancelFlight(self, flightID, currentTime):
         # settle, reschedule
         self.currentTime = currentTime
@@ -150,7 +149,7 @@ class Scheduler:
         self.reschedule(rt)
         
         if flightID not in self.handles:
-            print("Flight does not exist.")
+            print(f"Flight {flightID} not found")
         elif flightID in self.active_flights:
             print(f"Cannot cancel: Flight {flightID} has already departed.")
         else:
@@ -168,7 +167,6 @@ class Scheduler:
             # print updated ETAs
             self.print_updated_etas()
 
-
     def reprioritize(self, flightID, currentTime, newPriority):
         # settle, reschedule
         self.currentTime = currentTime
@@ -176,7 +174,7 @@ class Scheduler:
         self.reschedule(rt)
 
         if flightID not in self.handles:
-            print("Flight does not exist.")
+            print(f"Flight {flightID} not found")
         elif flightID in self.active_flights:
             print(f"Cannot reprioritize: Flight {flightID} has already departed.")
         else:
@@ -197,7 +195,6 @@ class Scheduler:
             # print updated ETAs
             self.print_updated_etas()
 
-
     def addRunways(self, count, currentTime):
         # settle, reschedule
         self.currentTime = currentTime
@@ -210,8 +207,10 @@ class Scheduler:
             for i in range(self.numRunways + 1,self.numRunways + 1 + count):
                 rt.insert((currentTime,i), (i,currentTime))
             # reschedule
-            self.reschedule(rt, restart_changes=False)
             self.numRunways += count
+            rt = self.settle()
+            self.reschedule(rt, restart_changes=False)
+            rt = self.settle()
             print(f"Additional {count} runways are now available")
             # print updated ETAs
             self.print_updated_etas()
@@ -240,7 +239,6 @@ class Scheduler:
             # print updated ETAs
             self.print_updated_etas()
 
-
     def printActive(self):
         i = 0
         for key in sorted(self.active_flights.keys()):
@@ -260,7 +258,6 @@ class Scheduler:
                 print(f"[{f.flightID}]")
             if len(flights) == 0:
                 print("There are no flights in that time period")
-
 
     def tick(self, t):
         self.currentTime = t

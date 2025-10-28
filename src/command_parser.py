@@ -85,4 +85,4 @@ def parse_commands(filename):
             break
 
 if __name__ == "__main__":
-    parse_commands("input1.txt")
+    parse_commands("input2.txt")
