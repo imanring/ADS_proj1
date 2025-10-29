@@ -51,6 +51,7 @@ class Scheduler:
             rslt, self.pending_flights = self.pending_flights.pop_max()
             rslt[1].state = "INPROGRESS"
             self.active_flights[rslt[1].flightID] = rslt[1]
+            self.airline_index[rslt[1].airlineID].remove(rslt[1].flightID)
         new_runway_pool = MinHeap()
         runwayIDs = set(range(1, self.numRunways + 1))
         for key, value in self.active_flights.items():  # new runway heap
@@ -130,7 +131,7 @@ class Scheduler:
                 self.airline_index[airlineID].append(flightID)
             else:
                 self.airline_index[airlineID] = [flightID]
-            print(self.airline_index[airlineID])
+            #print(self.airline_index[airlineID])
             self.handles[flightID] = (new_flight, None)
             if self.pending_flights is not None:
                 self.pending_flights = self.pending_flights.meld(new_flight)
@@ -158,7 +159,7 @@ class Scheduler:
             # shouldn't be in active_flights
             self.time_table.arbitrary_delete(self.handles[flightID][1].idx)
             # inefficient method of removing from airline_index
-            self.airline_index[self.handles[flightID][0].payload.airlineID] = [c for c in self.airline_index[self.handles[flightID][0].payload.airlineID] if c != self.handles[flightID][0].payload.flightID]
+            self.airline_index[self.handles[flightID][0].payload.airlineID].remove(self.handles[flightID][0].payload.flightID)
             self.handles.pop(flightID)
 
             # reschedule
@@ -228,11 +229,12 @@ class Scheduler:
             # remove flights from data structures
             airlineIDs = [k for k in self.airline_index.keys() if k >= airlineLow and k <= airlineHigh]
             for aID in airlineIDs:
-                print(self.airline_index[aID])
+                #print(f"GH {aID}: ", self.airline_index[aID])
                 for fID in self.airline_index[aID]:
                     # remove from datastructures
                     if fID not in self.active_flights:
                         self.pending_flights = self.pending_flights.arbitrary_delete(self.handles[fID][0])
+                        self.time_table.arbitrary_delete(self.handles[fID][1].idx)
                         self.handles.pop(fID)
                         self.airline_index[aID].remove(fID)
             # reschedule
