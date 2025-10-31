@@ -1,5 +1,6 @@
 import re
 from scheduler import Scheduler
+import argparse
 
 def parse_commands(filename):
     with open(filename, 'r') as f:
@@ -85,4 +86,7 @@ def parse_commands(filename):
             break
 
 if __name__ == "__main__":
-    parse_commands("input3.txt")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename", type=str, help="The name of the file to process.")
+    args = parser.parse_args()
+    parse_commands(args.filename)
